@@ -1,0 +1,59 @@
+import pandas as pd
+import nltk
+import re
+from sklearn.feature_extraction.text import CountVectorizer, TfidfVectorizer
+from sklearn.model_selection import train_test_split
+from sklearn.naive_bayes import MultinomialNB
+from sklearn.metrics import accuracy_score
+from collections import Counter
+
+# Download stopwords
+nltk.download('stopwords')
+from nltk.corpus import stopwords
+from google.colab import files
+uploaded = files.upload()
+filename = input("Enter the filename (e.g., 'Restaurant reviews.csv'): ")
+review_column = input("Enter the column name for reviews: ")
+rating_column = input("Enter the column name for ratings: ")
+df = pd.read_csv(filename)
+def clean_text(text):
+    if not isinstance(text, str):
+        text = str(text)
+    text = re.sub('[^a-zA-Z]', ' ', text)
+    text = text.lower()
+    text = text.split()
+    text = [word for word in text if word not in set(stopwords.words('english'))]
+    return ' '.join(text)
+df[review_column] = df[review_column].astype(str).apply(clean_text)
+df[rating_column] = pd.to_numeric(df[rating_column], errors='coerce')
+df['Liked'] = (df[rating_column] >= 3).astype(int)
+X = df[review_column].dropna()
+y = df['Liked']
+y = y[X.index]
+X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.2, random_state=42)
+vectorizer = TfidfVectorizer()
+X_train = vectorizer.fit_transform(X_train)
+X_test = vectorizer.transform(X_test)
+model = MultinomialNB()
+model.fit(X_train, y_train)
+y_pred = model.predict(X_test)
+accuracy = accuracy_score(y_test, y_pred)
+print(f'Accuracy: {accuracy * 100:.2f}%')
+# List of common Indian food dishes (can be customized)
+common_foods = [
+    'biryani', 'dosa', 'idli', 'samosa', 'pani puri', 'paneer', 'butter chicken', 'naan',
+    'tandoori chicken', 'chole', 'poha', 'paratha', 'dal', 'jalebi', 'gulab jamun',
+    'masala', 'chaat', 'kebab', 'pulao', 'uttapam', 'vada', 'ladoo'
+]
+def filter_food_items(review):
+    words = review.split()
+    foods = [word for word in words if word in common_foods]
+    return ' '.join(foods)
+df['FoodItems'] = df[review_column].apply(filter_food_items)
+positive_reviews = df[df['Liked'] == 1]['FoodItems']
+food_counter = Counter(common_foods)
+for review in positive_reviews:
+    food_counter.update(review.split())
+print("Top 10 food recommendations based on positive reviews:")
+for dish, freq in food_counter.most_common(10):
+    print(f"{dish}: {freq}")
